@@ -1,0 +1,69 @@
+##### Code created by Simon Butterworth 2023 #####
+
+#Setup
+library(tidyverse)
+library(ggrepel)
+library(dplyr)
+library(ggpubr)
+library(ggplot2)
+library(scales)
+
+#Import data
+setwd("~/Desktop/MANUSCRIPT/GRA12 paper/IP")
+data <- read.csv("GRA12 Co-IP.csv") %>%
+  arrange(LOCALISATION) %>%
+  mutate(LOCALISATION=factor(LOCALISATION, levels=c("Toxoplasma - dense granules", "Toxoplasma - other/unknown", "Host")))
+
+#Plot L2FC vs p-value
+pdf("GRA12 Co-IP - L2FC vs p-value.pdf", width = 5, height = 5)
+ggplot(data, aes(x=IBAQ_L2FC, y=MINUS_LOG10_P_VALUE, colour=LOCALISATION, label=LABEL))+
+  geom_point(size=2)+
+  geom_text_repel(data=filter(data, IBAQ_L2FC>=3 | LABEL=="PHB"| LABEL =="BIP" | LABEL =="ATP2A2" | LABEL =="MAG1"| LABEL =="FNDC3A" ), box.padding = 0.5, show.legend = F, size=5)+
+  scale_x_continuous(limits = c(-7,7), breaks=seq(-12,12,3), expand=c(0,0))+
+  scale_y_continuous(limits=c(0,5), breaks = seq(0,10,1), expand = c(0,0))+
+  scale_colour_manual(values=c("slateblue", "cadetblue", "grey70"))+
+  labs(x="iBAQ L2FC", y="-Log10(p-value)", colour="Localisation")+
+  theme_pubr(border=T, legend = c(0.01,0.99))+
+  theme(text = element_text(size=15),
+        legend.justification = c(0,1), 
+        panel.grid.major.x = element_line(colour="grey80"),
+        legend.background = element_blank(),
+        plot.margin = margin(10,10,10,10))
+dev.off()
+ggsave(filename = "./GRA12 Co-IP - L2FC vs p-value.png", dpi = 600, width = 8, height = 8) #For width and height, enter the size in cm for correct scale
+
+
+#Plot L2FC vs unique peptides
+pdf("GRA12 Co-IP - L2FC vs unique peptides.pdf", width = 5.5, height = 5)
+ggplot(data, aes(x=IBAQ_L2FC, y=UNIQUE_PEPTIDES_HA_1, colour=LOCALISATION, label=LABEL))+
+  geom_point(size=2)+
+  geom_text_repel(data=filter(data, IBAQ_L2FC>=3 | LABEL=="BIP" | LABEL=="PHB" | LABEL =="MAG1" | LABEL =="ATP2A2" | LABEL =="RPN1" ), box.padding = 0.5, show.legend = F, size=5)+
+  scale_x_continuous(limits = c(-7,7), breaks=seq(-12,12,3), expand=c(0,0))+
+  scale_y_continuous(trans=pseudo_log_trans(), limits=c(0,150), breaks=c(0,1,10,100), expand = c(0,0))+
+  scale_colour_manual(values=c("slateblue", "cadetblue", "grey70"))+
+  labs(x="iBAQ L2FC", y="Unique peptides", colour="Localisation")+
+  theme_pubr(border=T, legend = c(0.01,0.99))+
+  theme(text = element_text(size=15),
+        legend.justification = c(0,1), 
+        panel.grid.major.x = element_line(colour="grey80"),
+        legend.background = element_blank(),
+        plot.margin = margin(10,10,10,10))
+dev.off()
+ggsave(filename = "./GRA12 Co-IP - L2FC vs unique peptides.png", dpi = 600, width = 8, height = 8) #For width and height, enter the size in cm for correct scale
+
+
+#Plot L2FC vs % sequence coverage
+ggplot(data, aes(x=IBAQ_L2FC, y=SEQUENCE_COVERAGE_HA_1, colour=LOCALISATION, label=LABEL))+
+  geom_point(size=2)+
+  geom_text_repel(data=filter(data, IBAQ_L2FC>=3 & SEQUENCE_COVERAGE_HA_1>0 | LABEL=="BIP" | LABEL=="PHB" | LABEL =="MAG1" | LABEL =="MTX2" | LABEL =="RPN1" | LABEL=="COX5A"), box.padding = 0.5, show.legend = F, size=5)+
+  scale_x_continuous(limits = c(-7,7), breaks=seq(-12,12,3), expand=c(0,0))+
+  scale_y_continuous(limits=c(0,100), breaks=seq(0,100,25), expand = c(0,0))+
+  scale_colour_manual(values=c("slateblue", "cadetblue", "grey70"))+
+  labs(x="iBAQ L2FC", y="Percent sequence coverage", colour="Localisation")+
+  theme_pubr(border=T, legend = c(0.01,0.99))+
+  theme(text = element_text(size=15),
+        legend.justification = c(0,1), 
+        panel.grid.major.x = element_line(colour="grey80"),
+        legend.background = element_blank(),
+        plot.margin = margin(10,10,10,10))
+ggsave(filename = "./GRA12 Co-IP - L2FC vs sequence coverage.png", dpi = 600, width = 8, height = 8) #For width and height, enter the size in cm for correct scale
