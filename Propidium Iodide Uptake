@@ -1,0 +1,245 @@
+##### Code created by Simon Butterworth to plot the time course experiment with Propidium Iodide uptake #####
+
+rm(list=ls())
+library(tidyverse)
+library(scales)
+library(readxl)
+library(ggpubr)
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+setwd("~/Desktop/MANUSCRIPT/GRA12 paper/PIuptake")
+
+startpoint.hour <- 0
+
+#####
+##### 230721 GRA12 BMDM MOI = 3 #####
+data.230721 <- read_excel("230721 GRA12 PI Uptake.xlsx", sheet="Data") %>%
+  left_join(read_excel("230721 GRA12 PI Uptake.xlsx", sheet="Key"), by="position") %>%
+  mutate(hour=(timepoint/2)-0.5) %>%
+  mutate(date="230721") %>%
+  filter(strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP"))
+startpoint <- data.230721 %>% 
+  filter(hour==startpoint.hour) %>%
+  mutate(startpoint=intden) %>%
+  select(position, startpoint)
+endpoint <- read_excel("230721 GRA12 PI Uptake.xlsx", sheet="Endpoint") %>%
+  mutate(endpoint=intden) %>%
+  select(position, endpoint)
+data.230721 <- data.230721 %>%
+  left_join(startpoint, by="position") %>%
+  left_join(endpoint, by="position") %>%
+  dplyr::group_by(date, strain, hour, ifng) %>%
+  dplyr::summarise(percent=(mean(intden)-mean(startpoint))/(mean(endpoint)-mean(startpoint))*100)
+
+ggplot(filter(data.230721, ifng==100&strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230721, ifng==100&strain%in%c("Uninfected", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP")), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230721, ifng==100&strain%in%c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP")), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+
+#####
+##### 230726 GRA12 BMDM MOI = 3 #####
+data.230726 <- read_excel("230726 GRA12 PI Uptake.xlsx", sheet="Data") %>%
+  left_join(read_excel("230726 GRA12 PI Uptake.xlsx", sheet="Key"), by="position") %>%
+  mutate(hour=(timepoint/2)-0.5) %>%
+  mutate(date="230726") %>%
+  filter(strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP"))
+startpoint <- data.230726 %>% 
+  filter(hour==startpoint.hour) %>%
+  mutate(startpoint=intden) %>%
+  select(position, startpoint)
+endpoint <- read_excel("230726 GRA12 PI Uptake.xlsx", sheet="Endpoint") %>%
+  mutate(endpoint=intden) %>%
+  select(position, endpoint)
+data.230726 <- data.230726 %>%
+  left_join(startpoint, by="position") %>%
+  left_join(endpoint, by="position") %>%
+  dplyr::group_by(date, strain, hour, ifng) %>%
+  dplyr::summarise(percent=(mean(intden)-mean(startpoint))/(mean(endpoint)-mean(startpoint))*100)
+
+ggplot(filter(data.230726, strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-50,100), oob=squish)
+ggplot(filter(data.230726, strain%in%c("Uninfected", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230726, strain%in%c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-0,100), oob=squish)
+
+#####
+##### 230802 GRA12 BMDM MOI = 3 #####
+data.230802 <- read_excel("230802 GRA12 PI Uptake.xlsx", sheet="Data") %>%
+  left_join(read_excel("230802 GRA12 PI Uptake.xlsx", sheet="Key"), by="position") %>%
+  mutate(hour=(timepoint/2)-0.5) %>%
+  mutate(date="230802") %>%
+  filter(strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP"))
+startpoint <- data.230802 %>% 
+  filter(hour==startpoint.hour) %>%
+  mutate(startpoint=intden) %>%
+  select(position, startpoint)
+endpoint <- read_excel("230802 GRA12 PI Uptake.xlsx", sheet="Endpoint") %>%
+  mutate(endpoint=intden) %>%
+  select(position, endpoint)
+data.230802 <- data.230802 %>%
+  left_join(startpoint, by="position") %>%
+  left_join(endpoint, by="position") %>%
+  dplyr::group_by(date, strain, hour, ifng) %>%
+  dplyr::summarise(percent=(mean(intden)-mean(startpoint))/(mean(endpoint)-mean(startpoint))*100)
+
+ggplot(filter(data.230802, strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230802, strain%in%c("Uninfected", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230802, strain%in%c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+
+#####
+##### 230804 GRA12 BMDM MOI = 3 #####
+data.230804 <- read_excel("230804 GRA12 PI Uptake.xlsx", sheet="Data") %>%
+  left_join(read_excel("230804 GRA12 PI Uptake.xlsx", sheet="Key"), by="position") %>%
+  mutate(hour=(timepoint/2)-0.5) %>%
+  mutate(date="230804") %>%
+  filter(strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP"))
+startpoint <- data.230804 %>% 
+  filter(hour==startpoint.hour) %>%
+  mutate(startpoint=intden) %>%
+  select(position, startpoint)
+endpoint <- read_excel("230804 GRA12 PI Uptake.xlsx", sheet="Endpoint") %>%
+  mutate(endpoint=intden) %>%
+  select(position, endpoint)
+data.230804 <- data.230804 %>%
+  left_join(startpoint, by="position") %>%
+  left_join(endpoint, by="position") %>%
+  dplyr::group_by(date, strain, hour, ifng) %>%
+  dplyr::summarise(percent=(mean(intden)-mean(startpoint))/(mean(endpoint)-mean(startpoint))*100)
+
+ggplot(filter(data.230804, strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230804, strain%in%c("Uninfected", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230804, strain%in%c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+
+#####
+##### 230809 GRA12 BMDM MOI = 3 #####
+data.230809 <- read_excel("230809 GRA12 PI Uptake.xlsx", sheet="Data") %>%
+  left_join(read_excel("230809 GRA12 PI Uptake.xlsx", sheet="Key"), by="position") %>%
+  mutate(hour=(timepoint/2)-0.5) %>%
+  mutate(date="230809") %>%
+  filter(strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP"))
+startpoint <- data.230809 %>% 
+  filter(hour==startpoint.hour) %>%
+  mutate(startpoint=intden) %>%
+  select(position, startpoint)
+endpoint <- read_excel("230809 GRA12 PI Uptake.xlsx", sheet="Endpoint") %>%
+  mutate(endpoint=intden) %>%
+  select(position, endpoint)
+data.230809 <- data.230809 %>%
+  left_join(startpoint, by="position") %>%
+  left_join(endpoint, by="position") %>%
+  dplyr::group_by(date, strain, hour, ifng) %>%
+  dplyr::summarise(percent=(mean(intden)-mean(startpoint))/(mean(endpoint)-mean(startpoint))*100)
+
+ggplot(filter(data.230809, strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230809, strain%in%c("Uninfected", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230809, strain%in%c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+
+#####
+##### 230811 GRA12 BMDM MOI = 3 #####
+data.230811 <- read_excel("230811 GRA12 PI Uptake.xlsx", sheet="Data") %>%
+  left_join(read_excel("230811 GRA12 PI Uptake.xlsx", sheet="Key"), by="position") %>%
+  mutate(hour=(timepoint/2)-0.5) %>%
+  mutate(date="230811") %>%
+  filter(strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP"))
+startpoint <- data.230811 %>% 
+  filter(hour==startpoint.hour) %>%
+  mutate(startpoint=intden) %>%
+  select(position, startpoint)
+endpoint <- read_excel("230811 GRA12 PI Uptake.xlsx", sheet="Endpoint") %>%
+  mutate(endpoint=intden) %>%
+  select(position, endpoint)
+data.230811 <- data.230811 %>%
+  left_join(startpoint, by="position") %>%
+  left_join(endpoint, by="position") %>%
+  dplyr::group_by(date, strain, hour, ifng) %>%
+  dplyr::summarise(percent=(mean(intden)-mean(startpoint))/(mean(endpoint)-mean(startpoint))*100)
+
+ggplot(filter(data.230811, strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230811, strain%in%c("Uninfected", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+ggplot(filter(data.230811, strain%in%c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP")&ifng==100), aes(x=hour, percent, colour=interaction(ifng, strain)))+
+  geom_point()+geom_line()+scale_y_continuous(limits=c(-20,100), oob=squish)
+
+#####
+##### Combined Data #####
+data <- rbind(data.230721,
+              filter(data.230726, strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")),
+              data.230802,
+              data.230804,
+              data.230809,
+              data.230811) %>%
+  #filter(ifng==100) %>%
+  mutate(strain=factor(strain, levels=c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP","PRUdUPRT", "PRUdGRA12")))
+
+pdf("FigureS5_B.pdf")
+ggplot(filter(data, strain%in%c("Uninfected", "PRUdUPRT", "PRUdGRA12")), aes(x=hour,y=percent, colour=strain, linetype=factor(ifng)))+
+  stat_summary(geom="point", fun="mean", size=2)+
+  stat_summary(geom="line", fun="mean", size=1)+
+  stat_summary(geom="pointrange", fun.data=mean_sd, size=0.3)+
+  scale_y_continuous(limits=c(0,100), expand=c(0,1), oob=squish)+
+  scale_x_continuous(limits=c(0,12), oob=censor, breaks=seq(0,12,3))+
+  scale_colour_manual(values=c("black","grey50","darkorange2"), labels=c("Uninfected", "PRU \u0394UPRT", "PRU \u0394GRA12"))+
+  scale_linetype_manual(values = c("dotted", "solid"), labels = c("0", "100")) + # Manual linetype scale
+  theme_pubr(border=T)+
+  theme(legend.position=c(0.01,0.99), legend.box="horizontal", legend.justification=c(0,1), text=element_text(size=24))+
+  labs(x="Hours post-infection", y="Propidium Iodide uptake \n[% of total cells]", colour="Strain", linetype="IFN\u03b3", text=element_text(size=24))
+dev.off()
+
+ggplot(filter(data, strain%in%c("Uninfected", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP")), aes(x=hour, percent, colour=strain, linetype=factor(ifng)))+
+  stat_summary(geom="point", fun="mean", size=2)+
+  stat_summary(geom="line", fun="mean", size=1)+
+  stat_summary(geom="pointrange", fun.data=mean_sd, size=0.3)+
+  scale_y_continuous(limits=c(0,100), expand=c(0,1), oob=squish)+
+  scale_x_continuous(limits=c(0,12), oob=censor, breaks=seq(0,12,3))+
+  scale_colour_manual(values=c("black", "grey50", "darkorange2", "darkgreen"), labels=c("Uninfected", "RH \u0394UPRT", "RH \u0394GRA12", "RH \u0394GRA12::GRA12-HA"))+
+  scale_linetype_manual(values = c("dotted", "solid"), labels = c("0", "100")) + # Manual linetype scale
+  theme_pubr(border=T)+
+  theme(legend.position=c(0.01,0.99), legend.box="horizontal", legend.justification=c(0,1), text=element_text(size=24))+
+  labs(x="Hours post-infection", y="Propidium Iodide uptake \n[% of total cells]", colour="Strain", linetype="IFN\u03b3", text=element_text(size=24))
+
+ggplot(filter(data, strain%in%c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP")), aes(x=hour, percent, colour=strain, linetype=factor(ifng)))+
+  stat_summary(geom="point", fun="mean", size=2)+
+  stat_summary(geom="line", fun="mean", size=1)+
+  stat_summary(geom="pointrange", fun.data=mean_sd, size=0.3)+
+  scale_y_continuous(limits=c(0,100), expand=c(0,1), oob=squish)+
+  scale_x_continuous(limits=c(0,12), oob=censor, breaks=seq(0,12,3))+
+  scale_colour_manual(values=c("black", "grey50", "darkorange2", "darkgreen"), labels=c("Uninfected", "VAND \u0394UPRT", "VAND \u0394GRA12", "VAND \u0394GRA12::GRA12-HA"))+
+  scale_linetype_manual(values = c("dotted", "solid"), labels = c("0", "100")) + # Manual linetype scale
+  theme_pubr(border=T)+
+  theme(legend.position=c(0.01,0.99),legend.box="horizontal", legend.justification=c(0,1), text=element_text(size=18))+
+  labs(x="Hours post-infection", y="Propidium Iodide uptake \n[% of total cells]", colour="Strain", linetype="IFN\u03b3", text=element_text(size=24))
+
+data.9hpi <- filter(data, hour==9, ifng==100) %>%
+  mutate(strain=factor(strain, levels=c("Uninfected", "VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP", "RHdUPRT", "RHdGRA12", "RHdGRA12-COMP", "PRUdUPRT", "PRUdGRA12"))) %>%
+  mutate(type=ifelse(strain%in%c("VANDdUPRT", "VANDdGRA12", "VANDdGRA12-COMP"), yes="VAND", no="Uninfected")) %>%
+  mutate(type=ifelse(strain%in%c("RHdUPRT", "RHdGRA12", "RHdGRA12-COMP"), yes="RH", no=type)) %>%
+  mutate(type=ifelse(strain%in%c("PRUdUPRT", "PRUdGRA12"), yes="PRU", no=type))
+  write.csv(data.9hpi, file = "PI_9hpi.csv")
+
+ggplot(data.9hpi, aes(x=strain, y=percent, fill=type))+
+  stat_summary(geom="col", fun="mean")+
+  geom_line(aes(group=interaction(type, date)))+
+  geom_point()+
+  theme(axis.text.x=element_text(angle=45, hjust=1))+
+  #theme_pubr(border=T)+
+  scale_y_continuous(limits=c(0,60), oob=squish)
+
+
+t.test(x = data.6hpi$percent[data.6hpi$strain=="PRUdUPRT"],  data.6hpi$percent[data.6hpi$strain=="PRUdGRA12"],  paired=T)$p.value*5
+t.test(x = data.6hpi$percent[data.6hpi$strain=="RHdUPRT"],   data.6hpi$percent[data.6hpi$strain=="RHdGRA12"],   paired=T)$p.value*5
+t.test(x = data.6hpi$percent[data.6hpi$strain=="VANDdUPRT"], data.6hpi$percent[data.6hpi$strain=="VANDdGRA12"], paired=T)$p.value*5
