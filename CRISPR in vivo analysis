@@ -1,0 +1,478 @@
+##### CRISPR SCREEN ANALYSIS 2023 #####
+#### Code originally written by Simon Butterworth in 2023, modified by Francesca Torelli on 240109 ####
+
+########################################
+##### Setup #####
+################VAND screen################
+
+rm(list=ls())
+library(tidyverse)
+library(ggrepel)
+library(scales)
+library(tune)
+library(ggpubr)
+library(openxlsx)
+library(ggplot2)
+geo.mean <- function(x) (prod(x[x!=0]))^(1/sum(x!=0))
+
+#####
+##### User inputs #####
+
+#Set working directory
+setwd("~/Desktop/MANUSCRIPT/GRA12/CRISPR screens")
+#Select data file (include "./inputs/" and ".csv")
+counts.file <- "./inputs/VAND In Vivo CRISPR Screen Raw Counts.csv"
+#Select name of output files
+output.name <- "VAND In Vivo CRISPR Screen"
+#Select column names for analysis: L2FC 1 is calculated from group.2 versus group.1; L2FC 2 is calculated from group.4 versus group.3
+group.1 <- c("PLASMID")
+group.2 <- c("INOCULUM")
+group.3 <- c("INOCULUM")
+group.4 <- c("PECS_1", "PECS_2", "PECS_3", "PECS_4", "PECS_5")
+
+#####
+##### ANALYSIS #####
+
+#Subset counts to keep only selected groups
+all.samples <- c(group.1, group.2, group.3, group.4)
+counts <- read.csv(counts.file) %>% select(guide, gene, identity, all.samples)
+
+#Filter out guides not detected in the plasmid, inoculum, plus at least three PECS
+for (i in list(group.1, group.2, group.3, group.4)) {
+  if (length(i)==1) {counts <- filter(counts, as.symbol(i)>0)}
+  if (length(i)==2) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=2))}
+  if (length(i)>=3) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=3))}
+}
+
+#Normalise read counts using the median-of-ratios method (DeSeq2)
+counts$geomean <- apply(counts[,all.samples],1, geo.mean)
+norm.factors <- c()
+for (i in all.samples) {
+  counts[,paste(i,".ratio")] <- counts[,i]/counts[,"geomean"]
+  norm.factors[i] <- median(counts[,paste(i,".ratio")], na.rm=T)
+  counts[,i] <- counts[,i]/norm.factors[i]
+  counts[,paste(i,".ratio")] <- NULL }
+counts$geomean <- NULL
+
+#Calculate L2FCs for each guide (using the geometric mean of non-zero read counts where there are multiple samples)
+counts <- counts %>%
+  mutate(group.1.geomean=apply(counts[,group.1, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.2.geomean=apply(counts[,group.2, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.3.geomean=apply(counts[,group.3, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.4.geomean=apply(counts[,group.4, drop=FALSE], 1, geo.mean)) %>%
+  mutate(l2fc.1=log2(group.2.geomean/group.1.geomean)) %>%
+  mutate(l2fc.2=log2(group.4.geomean/group.3.geomean))
+
+#Calculate median L2FC, MAD, p-value, and DISCO score for genes with at least 3 guides
+l2fcs <- counts %>%
+  group_by(gene, identity) %>%
+  filter(n()>3) %>%
+  dplyr::summarise(median.l2fc.1 = median(l2fc.1),
+                   mad.l2fc.1    = mad(l2fc.1),
+                   pvalue.l2fc.1 = t.test(x=log2(group.2.geomean), y=log2(group.1.geomean), alternative="two.sided", paired=T)$p.value,
+                   median.l2fc.2 = median(l2fc.2),
+                   mad.l2fc.2    = mad(l2fc.2),
+                   pvalue.l2fc.2 = t.test(x=log2(group.4.geomean), y=log2(group.3.geomean), alternative="two.sided", paired=T)$p.value) %>%
+  mutate(disco.score = abs(median.l2fc.1-median.l2fc.2) * abs(log10(pvalue.l2fc.1)+log10(pvalue.l2fc.2)) ) %>%
+  mutate(l2fc.difference=median.l2fc.1-median.l2fc.2)
+
+#VAND PLOT#
+ggplot(l2fcs, aes(x=median.l2fc.1, y=median.l2fc.2, label=identity))+
+  geom_hline(yintercept = 0, size=1, colour="grey90")+
+  geom_vline(xintercept = 0, size=1, colour="grey90")+
+  geom_abline(slope=1, intercept = 0, size=1, colour="grey90", lty="22")+
+  geom_point(aes(size=abs(disco.score), colour=disco.score))+
+  scale_size_continuous(range=c(0,30),  breaks=seq(0,30,5), guide="none")+
+  scale_colour_continuous(limits=c(0,30), low="grey80", high="darkorange3")+
+  #geom_text_repel(data=filter(l2fcs, disco.score>12), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=subset(l2fcs, median.l2fc.2 < -1.7 & median.l2fc.1 >-1.6), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=filter(l2fcs, identity%in%c("GRA71", "ROP18", "GRA15", "GRA7", "GRA57", "ROP16", "GRA3")), size=5, box.padding = 0.3, nudge_x = 0.1, nudge_y = +0.1, min.segment.length = 0, segment.size=0.5)+
+  scale_colour_gradient2(low="grey60", mid="grey80", high="darkorange3", midpoint = 0, limits=c(0,30), breaks=seq(0,30,10),oob=squish)+
+  theme_pubr(border=T)+
+  labs(x=expression(paste("Median L2FC ", italic("in vitro"))), y=expression(paste("Median L2FC ", italic("in vivo"))), size="DISCO", colour="DISCO")+
+  theme(text=element_text(size=15), plot.margin = margin(0,0,0,0), legend.position=c(0.03,0.99), legend.justification=c(0,1), legend.direction = "horizontal")+
+  guides(colour = guide_colourbar(title.position = "top", label.theme = element_text(size=15), ticks = F, barheight = 1, title.hjust = 0.5, label.vjust = 0.5))
+ggsave(file=paste("./outputs/", output.name, ".png", sep=""), dpi = 600, width = 8, height = 8)
+
+#Save raw counts, normalised counts, guide L2FCs and gene L2FCs
+write.xlsx(x = list("Raw Counts"=read.csv(counts.file) %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Normalised Counts"=counts %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Guide L2FCs"=counts %>% select(guide, gene, identity, l2fc.1, l2fc.2) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity, L2FC_IN_VITRO=l2fc.1, L2FC_IN_VIVO=l2fc.2),
+                    "Gene L2FCs"=l2fcs %>% rename(GENE=gene, IDENTITY=identity, MEDIAN_L2FC_IN_VITRO=median.l2fc.1, MAD_L2FC_IN_VITRO=mad.l2fc.1, P_VALUE_IN_VITRO=pvalue.l2fc.1, MEDIAN_L2FC_IN_VIVO=median.l2fc.2, MAD_L2FC_IN_VIVO=mad.l2fc.2, P_VALUE_IN_VIVO=pvalue.l2fc.2, L2FC_DIFFERENCE=l2fc.difference, DISCO_SCORE=disco.score)), 
+           file = paste("./outputs/", output.name, " Counts & L2FCs.xlsx", sep=""))
+
+
+####################################################################################
+####################################################################################
+
+################RH screen################
+
+rm(list=ls())
+geo.mean <- function(x) (prod(x[x!=0]))^(1/sum(x!=0))
+
+#Set working directory
+setwd("~/Desktop/MANUSCRIPT/GRA12/CRISPR screens")
+#Select data file (include "./inputs/" and ".csv")
+counts.file <- "./inputs/RH In Vivo CRISPR Screen Raw Counts.csv"
+#Select name of output files
+output.name <- "RH In Vivo CRISPR Screen"
+#Select column names for analysis: L2FC 1 is calculated from group.2 versus group.1; L2FC 2 is calculated from group.4 versus group.3
+group.1 <- c("PLASMID")
+group.2 <- c("INOCULUM")
+group.3 <- c("INOCULUM")
+group.4 <- c("PECS_1", "PECS_2", "PECS_3", "PECS_4", "PECS_5")
+
+#####
+##### ANALYSIS #####
+
+#Subset counts to keep only selected groups
+all.samples <- c(group.1, group.2, group.3, group.4)
+counts <- read.csv(counts.file) %>% select(guide, gene, identity, all.samples)
+
+#Filter out guides not detected in the plasmid, inoculum, plus at least three PECS
+for (i in list(group.1, group.2, group.3, group.4)) {
+  if (length(i)==1) {counts <- filter(counts, as.symbol(i)>0)}
+  if (length(i)==2) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=2))}
+  if (length(i)>=3) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=3))}
+}
+
+#Normalise read counts using the median-of-ratios method (DeSeq2)
+counts$geomean <- apply(counts[,all.samples],1, geo.mean)
+norm.factors <- c()
+for (i in all.samples) {
+  counts[,paste(i,".ratio")] <- counts[,i]/counts[,"geomean"]
+  norm.factors[i] <- median(counts[,paste(i,".ratio")], na.rm=T)
+  counts[,i] <- counts[,i]/norm.factors[i]
+  counts[,paste(i,".ratio")] <- NULL }
+counts$geomean <- NULL
+
+#Calculate L2FCs for each guide (using the geometric mean of non-zero read counts where there are multiple samples)
+counts <- counts %>%
+  mutate(group.1.geomean=apply(counts[,group.1, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.2.geomean=apply(counts[,group.2, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.3.geomean=apply(counts[,group.3, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.4.geomean=apply(counts[,group.4, drop=FALSE], 1, geo.mean)) %>%
+  mutate(l2fc.1=log2(group.2.geomean/group.1.geomean)) %>%
+  mutate(l2fc.2=log2(group.4.geomean/group.3.geomean))
+
+#Calculate median L2FC, MAD, p-value, and DISCO score for genes with at least 3 guides
+l2fcs <- counts %>%
+  group_by(gene, identity) %>%
+  filter(n()>3) %>%
+  dplyr::summarise(median.l2fc.1 = median(l2fc.1),
+                   mad.l2fc.1    = mad(l2fc.1),
+                   pvalue.l2fc.1 = t.test(x=log2(group.2.geomean), y=log2(group.1.geomean), alternative="two.sided", paired=T)$p.value,
+                   median.l2fc.2 = median(l2fc.2),
+                   mad.l2fc.2    = mad(l2fc.2),
+                   pvalue.l2fc.2 = t.test(x=log2(group.4.geomean), y=log2(group.3.geomean), alternative="two.sided", paired=T)$p.value) %>%
+  mutate(disco.score = abs(median.l2fc.1-median.l2fc.2) * abs(log10(pvalue.l2fc.1)+log10(pvalue.l2fc.2)) ) %>%
+  mutate(l2fc.difference=median.l2fc.1-median.l2fc.2)
+
+#RH PLOT#
+ggplot(l2fcs, aes(x=median.l2fc.1, y=median.l2fc.2, label=identity))+
+  geom_hline(yintercept = 0, size=1, colour="grey90")+
+  geom_vline(xintercept = 0, size=1, colour="grey90")+
+  geom_abline(slope=1, intercept = 0, size=1, colour="grey90", lty="22")+
+  geom_point(aes(size=abs(disco.score), colour=disco.score))+
+  scale_size_continuous(range=c(0,12),  breaks=seq(0,12,4), guide="none")+
+  scale_colour_continuous(limits=c(0,12), low="grey80", high="darkorange3")+
+  #geom_text_repel(data=filter(l2fcs, disco.score>6), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=subset(l2fcs, median.l2fc.2 < -1.5 & median.l2fc.1 >-1.8), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=filter(l2fcs, identity%in%c( "ROP18", "GRA15", "GRA7", "GRA3", "ROP16", "GRA44")), size=5, box.padding = 0.3, nudge_x = 0.1, nudge_y = +0.1, min.segment.length = 0, segment.size=0.5)+
+  scale_colour_gradient2(low="grey60", mid="grey80", high="darkorange3", midpoint = 0, limits=c(0,12), breaks=seq(0,12,4),oob=squish)+
+  theme_pubr(border=T)+
+  labs(x=expression(paste("Median L2FC ", italic("in vitro"))), y=expression(paste("Median L2FC ", italic("in vivo"))), size="DISCO", colour="DISCO")+
+  theme(text=element_text(size=15), plot.margin = margin(0,0,0,0), legend.position=c(0.03,0.99), legend.justification=c(0,1), legend.direction = "horizontal")+
+  guides(colour = guide_colourbar(title.position = "top", label.theme = element_text(size=15), ticks = F, barheight = 1, title.hjust = 0.5, label.vjust = 0.5))
+ggsave(file=paste("./outputs/", output.name, ".png", sep=""), dpi = 600, width = 8, height = 8)
+
+#Save raw counts, normalised counts, guide L2FCs and gene L2FCs
+write.xlsx(x = list("Raw Counts"=read.csv(counts.file) %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Normalised Counts"=counts %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Guide L2FCs"=counts %>% select(guide, gene, identity, l2fc.1, l2fc.2) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity, L2FC_IN_VITRO=l2fc.1, L2FC_IN_VIVO=l2fc.2),
+                    "Gene L2FCs"=l2fcs %>% rename(GENE=gene, IDENTITY=identity, MEDIAN_L2FC_IN_VITRO=median.l2fc.1, MAD_L2FC_IN_VITRO=mad.l2fc.1, P_VALUE_IN_VITRO=pvalue.l2fc.1, MEDIAN_L2FC_IN_VIVO=median.l2fc.2, MAD_L2FC_IN_VIVO=mad.l2fc.2, P_VALUE_IN_VIVO=pvalue.l2fc.2, L2FC_DIFFERENCE=l2fc.difference, DISCO_SCORE=disco.score)), 
+           file = paste("./outputs/", output.name, " Counts & L2FCs.xlsx", sep=""))
+
+
+####################################################################################
+####################################################################################
+
+################PRU screen################
+
+rm(list=ls())
+geo.mean <- function(x) (prod(x[x!=0]))^(1/sum(x!=0))
+
+#Set working directory
+setwd("~/Desktop/MANUSCRIPT/GRA12/CRISPR screens")
+#Select data file (include "./inputs/" and ".csv")
+counts.file <- "./inputs/PRU In Vivo CRISPR Screen Raw Counts.csv"
+#Select name of output files
+output.name <- "PRU In Vivo CRISPR Screen"
+#Select column names for analysis: L2FC 1 is calculated from group.2 versus group.1; L2FC 2 is calculated from group.4 versus group.3
+group.1 <- c("PLASMID")
+group.2 <- c("INOCULUM")
+group.3 <- c("INOCULUM")
+group.4 <- c("PECS_1", "PECS_2", "PECS_3", "PECS_4", "PECS_5")
+
+#####
+##### ANALYSIS #####
+
+#Subset counts to keep only selected groups
+all.samples <- c(group.1, group.2, group.3, group.4)
+counts <- read.csv(counts.file) %>% select(guide, gene, identity, all.samples)
+
+#Filter out guides not detected in the plasmid, inoculum, plus at least three PECS
+for (i in list(group.1, group.2, group.3, group.4)) {
+  if (length(i)==1) {counts <- filter(counts, as.symbol(i)>0)}
+  if (length(i)==2) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=2))}
+  if (length(i)>=3) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=3))}
+}
+
+#Normalise read counts using the median-of-ratios method (DeSeq2)
+counts$geomean <- apply(counts[,all.samples],1, geo.mean)
+norm.factors <- c()
+for (i in all.samples) {
+  counts[,paste(i,".ratio")] <- counts[,i]/counts[,"geomean"]
+  norm.factors[i] <- median(counts[,paste(i,".ratio")], na.rm=T)
+  counts[,i] <- counts[,i]/norm.factors[i]
+  counts[,paste(i,".ratio")] <- NULL }
+counts$geomean <- NULL
+
+#Calculate L2FCs for each guide (using the geometric mean of non-zero read counts where there are multiple samples)
+counts <- counts %>%
+  mutate(group.1.geomean=apply(counts[,group.1, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.2.geomean=apply(counts[,group.2, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.3.geomean=apply(counts[,group.3, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.4.geomean=apply(counts[,group.4, drop=FALSE], 1, geo.mean)) %>%
+  mutate(l2fc.1=log2(group.2.geomean/group.1.geomean)) %>%
+  mutate(l2fc.2=log2(group.4.geomean/group.3.geomean))
+
+#Calculate median L2FC, MAD, p-value, and DISCO score for genes with at least 3 guides
+l2fcs <- counts %>%
+  group_by(gene, identity) %>%
+  filter(n()>3) %>%
+  dplyr::summarise(median.l2fc.1 = median(l2fc.1),
+                   mad.l2fc.1    = mad(l2fc.1),
+                   pvalue.l2fc.1 = t.test(x=log2(group.2.geomean), y=log2(group.1.geomean), alternative="two.sided", paired=T)$p.value,
+                   median.l2fc.2 = median(l2fc.2),
+                   mad.l2fc.2    = mad(l2fc.2),
+                   pvalue.l2fc.2 = t.test(x=log2(group.4.geomean), y=log2(group.3.geomean), alternative="two.sided", paired=T)$p.value) %>%
+  mutate(disco.score = abs(median.l2fc.1-median.l2fc.2) * abs(log10(pvalue.l2fc.1)+log10(pvalue.l2fc.2)) ) %>%
+  mutate(l2fc.difference=median.l2fc.1-median.l2fc.2)
+
+#PRU PLOT#
+ggplot(l2fcs, aes(x=median.l2fc.1, y=median.l2fc.2, label=identity))+
+  geom_hline(yintercept = 0, size=1, colour="grey90")+
+  geom_vline(xintercept = 0, size=1, colour="grey90")+
+  geom_abline(slope=1, intercept = 0, size=1, colour="grey90", lty="22")+
+  geom_point(aes(size=abs(disco.score), colour=disco.score))+
+  scale_size_continuous(range=c(0,18),  breaks=seq(0,18,6), guide="none")+
+  scale_colour_continuous(limits=c(0,18), low="grey80", high="darkorange3")+
+  #geom_text_repel(data=filter(l2fcs, disco.score>6), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=subset(l2fcs, median.l2fc.2 < -1.7 & median.l2fc.1 >-1.5), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=filter(l2fcs, identity%in%c("213069", "305590", "GRA15", "GRA7", "GRA3", "ROP16", "ROP1")), size=5, box.padding = 0.3, nudge_x = 0.1, nudge_y = +0.1, min.segment.length = 0, segment.size=0.5)+
+  scale_colour_gradient2(low="grey60", mid="grey80", high="darkorange3", midpoint = 0, limits=c(0,18), breaks=seq(0,18,6),oob=squish)+
+  theme_pubr(border=T)+
+  labs(x=expression(paste("Median L2FC ", italic("in vitro"))), y=expression(paste("Median L2FC ", italic("in vivo"))), size="DISCO", colour="DISCO")+
+  theme(text=element_text(size=15), plot.margin = margin(0,0,0,0), legend.position=c(0.03,0.99), legend.justification=c(0,1), legend.direction = "horizontal")+
+  guides(colour = guide_colourbar(title.position = "top", label.theme = element_text(size=15), ticks = F, barheight = 1, title.hjust = 0.5, label.vjust = 0.5))
+ggsave(file=paste("./outputs/", output.name, ".png", sep=""), dpi = 600, width = 8, height = 8)
+
+#Save raw counts, normalised counts, guide L2FCs and gene L2FCs
+write.xlsx(x = list("Raw Counts"=read.csv(counts.file) %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Normalised Counts"=counts %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Guide L2FCs"=counts %>% select(guide, gene, identity, l2fc.1, l2fc.2) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity, L2FC_IN_VITRO=l2fc.1, L2FC_IN_VIVO=l2fc.2),
+                    "Gene L2FCs"=l2fcs %>% rename(GENE=gene, IDENTITY=identity, MEDIAN_L2FC_IN_VITRO=median.l2fc.1, MAD_L2FC_IN_VITRO=mad.l2fc.1, P_VALUE_IN_VITRO=pvalue.l2fc.1, MEDIAN_L2FC_IN_VIVO=median.l2fc.2, MAD_L2FC_IN_VIVO=mad.l2fc.2, P_VALUE_IN_VIVO=pvalue.l2fc.2, L2FC_DIFFERENCE=l2fc.difference, DISCO_SCORE=disco.score)), 
+           file = paste("./outputs/", output.name, " Counts & L2FCs.xlsx", sep=""))
+
+####################################################################################
+####################################################################################
+
+################VEG screen################
+
+rm(list=ls())
+geo.mean <- function(x) (prod(x[x!=0]))^(1/sum(x!=0))
+
+#Set working directory
+setwd("~/Desktop/MANUSCRIPT/GRA12/CRISPR screens")
+#Select data file (include "./inputs/" and ".csv")
+counts.file <- "./inputs/VEG In Vivo CRISPR Screen Raw Counts.csv"
+#Select name of output files
+output.name <- "VEG In Vivo CRISPR Screen"
+#Select column names for analysis: L2FC 1 is calculated from group.2 versus group.1; L2FC 2 is calculated from group.4 versus group.3
+group.1 <- c("PLASMID")
+group.2 <- c("INOCULUM")
+group.3 <- c("INOCULUM")
+group.4 <- c("PECS_1", "PECS_2", "PECS_3", "PECS_4", "PECS_5")
+
+#####
+##### ANALYSIS #####
+
+#Subset counts to keep only selected groups
+all.samples <- c(group.1, group.2, group.3, group.4)
+counts <- read.csv(counts.file) %>% select(guide, gene, identity, all.samples)
+
+#Filter out guides not detected in the plasmid, inoculum, plus at least three PECS
+for (i in list(group.1, group.2, group.3, group.4)) {
+  if (length(i)==1) {counts <- filter(counts, as.symbol(i)>0)}
+  if (length(i)==2) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=2))}
+  if (length(i)>=3) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=3))}
+}
+
+#Normalise read counts using the median-of-ratios method (DeSeq2)
+counts$geomean <- apply(counts[,all.samples],1, geo.mean)
+norm.factors <- c()
+for (i in all.samples) {
+  counts[,paste(i,".ratio")] <- counts[,i]/counts[,"geomean"]
+  norm.factors[i] <- median(counts[,paste(i,".ratio")], na.rm=T)
+  counts[,i] <- counts[,i]/norm.factors[i]
+  counts[,paste(i,".ratio")] <- NULL }
+counts$geomean <- NULL
+
+#Calculate L2FCs for each guide (using the geometric mean of non-zero read counts where there are multiple samples)
+counts <- counts %>%
+  mutate(group.1.geomean=apply(counts[,group.1, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.2.geomean=apply(counts[,group.2, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.3.geomean=apply(counts[,group.3, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.4.geomean=apply(counts[,group.4, drop=FALSE], 1, geo.mean)) %>%
+  mutate(l2fc.1=log2(group.2.geomean/group.1.geomean)) %>%
+  mutate(l2fc.2=log2(group.4.geomean/group.3.geomean))
+
+#Calculate median L2FC, MAD, p-value, and DISCO score for genes with at least 3 guides
+l2fcs <- counts %>%
+  group_by(gene, identity) %>%
+  filter(n()>3) %>%
+  dplyr::summarise(median.l2fc.1 = median(l2fc.1),
+                   mad.l2fc.1    = mad(l2fc.1),
+                   pvalue.l2fc.1 = t.test(x=log2(group.2.geomean), y=log2(group.1.geomean), alternative="two.sided", paired=T)$p.value,
+                   median.l2fc.2 = median(l2fc.2),
+                   mad.l2fc.2    = mad(l2fc.2),
+                   pvalue.l2fc.2 = t.test(x=log2(group.4.geomean), y=log2(group.3.geomean), alternative="two.sided", paired=T)$p.value) %>%
+  mutate(disco.score = abs(median.l2fc.1-median.l2fc.2) * abs(log10(pvalue.l2fc.1)+log10(pvalue.l2fc.2)) ) %>%
+  mutate(l2fc.difference=median.l2fc.1-median.l2fc.2)
+
+#VEG PLOT#
+ggplot(l2fcs, aes(x=median.l2fc.1, y=median.l2fc.2, label=identity))+
+  geom_hline(yintercept = 0, size=1, colour="grey90")+
+  geom_vline(xintercept = 0, size=1, colour="grey90")+
+  geom_abline(slope=1, intercept = 0, size=1, colour="grey90", lty="22")+
+  geom_point(aes(size=abs(disco.score), colour=disco.score))+
+  scale_size_continuous(range=c(0,12),  breaks=seq(0,12,4), guide="none")+
+  scale_colour_continuous(limits=c(0,12), low="grey80", high="darkorange3")+
+  #geom_text_repel(data=filter(l2fcs, disco.score>6), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=subset(l2fcs, median.l2fc.2 < -1 & median.l2fc.1 >-1.5), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=filter(l2fcs, identity%in%c("ROP18")), size=5, box.padding = 0.3, nudge_x = 0.1, nudge_y = +0.1, min.segment.length = 0, segment.size=0.5)+
+  scale_colour_gradient2(low="grey60", mid="grey80", high="darkorange3", midpoint = 0, limits=c(0,12), breaks=seq(0,12,4),oob=squish)+
+  theme_pubr(border=T)+
+  labs(x=expression(paste("Median L2FC ", italic("in vitro"))), y=expression(paste("Median L2FC ", italic("in vivo"))), size="DISCO", colour="DISCO")+
+  theme(text=element_text(size=15), plot.margin = margin(0,0,0,0), legend.position=c(0.03,0.99), legend.justification=c(0,1), legend.direction = "horizontal")+
+  guides(colour = guide_colourbar(title.position = "top", label.theme = element_text(size=15), ticks = F, barheight = 1, title.hjust = 0.5, label.vjust = 0.5))
+ggsave(file=paste("./outputs/", output.name, ".png", sep=""), dpi = 600, width = 8, height = 8)
+
+#Save raw counts, normalised counts, guide L2FCs and gene L2FCs
+write.xlsx(x = list("Raw Counts"=read.csv(counts.file) %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Normalised Counts"=counts %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Guide L2FCs"=counts %>% select(guide, gene, identity, l2fc.1, l2fc.2) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity, L2FC_IN_VITRO=l2fc.1, L2FC_IN_VIVO=l2fc.2),
+                    "Gene L2FCs"=l2fcs %>% rename(GENE=gene, IDENTITY=identity, MEDIAN_L2FC_IN_VITRO=median.l2fc.1, MAD_L2FC_IN_VITRO=mad.l2fc.1, P_VALUE_IN_VITRO=pvalue.l2fc.1, MEDIAN_L2FC_IN_VIVO=median.l2fc.2, MAD_L2FC_IN_VIVO=mad.l2fc.2, P_VALUE_IN_VIVO=pvalue.l2fc.2, L2FC_DIFFERENCE=l2fc.difference, DISCO_SCORE=disco.score)), 
+           file = paste("./outputs/", output.name, " Counts & L2FCs.xlsx", sep=""))
+
+
+#######################################################################################
+#######################################################################################
+################VEG screen ONLY 1 sgRNA################
+
+rm(list=ls())
+geo.mean <- function(x) (prod(x[x!=0]))^(1/sum(x!=0))
+
+#Set working directory
+setwd("~/Desktop/MANUSCRIPT/GRA12/CRISPR screens")
+#Select data file (include "./inputs/" and ".csv")
+counts.file <- "./inputs/VEG In Vivo CRISPR Screen Raw Counts.csv"
+#Select name of output files
+output.name <- "VEG In Vivo CRISPR Screen_1sgRNA"
+#Select column names for analysis: L2FC 1 is calculated from group.2 versus group.1; L2FC 2 is calculated from group.4 versus group.3
+group.1 <- c("PLASMID")
+group.2 <- c("INOCULUM")
+group.3 <- c("INOCULUM")
+group.4 <- c("PECS_1", "PECS_2", "PECS_3", "PECS_4", "PECS_5")
+
+
+
+
+#####
+##### ANALYSIS #####
+
+#Subset counts to keep only selected groups
+all.samples <- c(group.1, group.2, group.3, group.4)
+counts <- read.csv(counts.file) %>% select(guide, gene, identity, all.samples)
+
+#Filter out guides not detected in the plasmid, inoculum, plus at least three PECS
+for (i in list(group.1, group.2, group.3, group.4)) {
+  if (length(i)==1) {counts <- filter(counts, as.symbol(i)>0)}
+  if (length(i)==2) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=2))}
+  if (length(i)>=3) {counts <- filter(counts, apply(counts[,c(i)], 1, function(x) sum(x!=0)>=3))}
+}
+
+#Normalise read counts using the median-of-ratios method (DeSeq2)
+counts$geomean <- apply(counts[,all.samples],1, geo.mean)
+norm.factors <- c()
+for (i in all.samples) {
+  counts[,paste(i,".ratio")] <- counts[,i]/counts[,"geomean"]
+  norm.factors[i] <- median(counts[,paste(i,".ratio")], na.rm=T)
+  counts[,i] <- counts[,i]/norm.factors[i]
+  counts[,paste(i,".ratio")] <- NULL }
+counts$geomean <- NULL
+
+#Calculate L2FCs for each guide (using the geometric mean of non-zero read counts where there are multiple samples)
+counts <- counts %>%
+  mutate(group.1.geomean=apply(counts[,group.1, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.2.geomean=apply(counts[,group.2, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.3.geomean=apply(counts[,group.3, drop=FALSE], 1, geo.mean)) %>%
+  mutate(group.4.geomean=apply(counts[,group.4, drop=FALSE], 1, geo.mean)) %>%
+  mutate(l2fc.1=log2(group.2.geomean/group.1.geomean)) %>%
+  mutate(l2fc.2=log2(group.4.geomean/group.3.geomean))
+
+#Calculate median L2FC, MAD, p-value, and DISCO score for genes with at least 3 guides
+l2fcs <- counts %>%
+  group_by(gene, identity) %>%
+  filter(n()>1) %>%
+  dplyr::summarise(median.l2fc.1 = median(l2fc.1),
+                   mad.l2fc.1    = mad(l2fc.1),
+                   pvalue.l2fc.1 = t.test(x=log2(group.2.geomean), y=log2(group.1.geomean), alternative="two.sided", paired=T)$p.value,
+                   median.l2fc.2 = median(l2fc.2),
+                   mad.l2fc.2    = mad(l2fc.2),
+                   pvalue.l2fc.2 = t.test(x=log2(group.4.geomean), y=log2(group.3.geomean), alternative="two.sided", paired=T)$p.value) %>%
+  mutate(disco.score = abs(median.l2fc.1-median.l2fc.2) * abs(log10(pvalue.l2fc.1)+log10(pvalue.l2fc.2)) ) %>%
+  mutate(l2fc.difference=median.l2fc.1-median.l2fc.2)
+
+### Add score Sidik et al 2016 - RH In Vitro ####
+sidik <- read.csv("./inputs/published_datasets/Sidik et al 2016 - RH In Vitro.csv")
+colnames(sidik) <- c("gene", "sidik_score")
+l2fcs <- inner_join(l2fcs, sidik, by="gene")
+
+#VEG PLOT ONLY 1sgRNA#
+l2fcs_sidik_subset <- l2fcs[l2fcs$sidik_score>-1,]
+ggplot(l2fcs_sidik_subset, aes(x=median.l2fc.1, y=median.l2fc.2, label=identity))+
+  geom_hline(yintercept = 0, size=1, colour="grey90")+
+  geom_vline(xintercept = 0, size=1, colour="grey90")+
+  geom_abline(slope=1, intercept = 0, size=1, colour="grey90", lty="22")+
+  geom_point(aes(size=abs(disco.score), colour=disco.score))+
+  scale_size_continuous(range=c(0,12),  breaks=seq(0,12,4), guide="none")+
+  scale_colour_continuous(limits=c(0,12), low="grey80", high="darkorange3")+
+  #geom_text_repel(data=filter(l2fcs, disco.score>6), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=subset(l2fcs, median.l2fc.2 < -3 & median.l2fc.1 >-0.8 & median.l2fc.1<2), size=5, box.padding = 0.7, nudge_x = 0.1, nudge_y = -0.1, min.segment.length = 0, segment.size=0.5)+
+  geom_text_repel(data=filter(l2fcs, identity%in%c("ROP18", "GRA61", "GRA23", "GRA45")), size=5, box.padding = 0.3, nudge_x = 0.1, nudge_y = +0.1, min.segment.length = 0, segment.size=0.5)+
+  scale_colour_gradient2(low="grey60", mid="grey80", high="darkorange3", midpoint = 0, limits=c(0,12), breaks=seq(0,12,4),oob=squish)+
+  theme_pubr(border=T)+
+  labs(x=expression(paste("Median L2FC ", italic("in vitro"))), y=expression(paste("Median L2FC ", italic("in vivo"))), size="DISCO", colour="DISCO")+
+  theme(text=element_text(size=15), plot.margin = margin(0,0,0,0), legend.position=c(0.03,0.99), legend.justification=c(0,1), legend.direction = "horizontal")+
+  guides(colour = guide_colourbar(title.position = "top", label.theme = element_text(size=15), ticks = F, barheight = 1, title.hjust = 0.5, label.vjust = 0.5))
+ggsave(file=paste("./outputs/", output.name, ".png", sep=""), dpi = 600, width = 8, height = 8)
+
+#Save raw counts, normalised counts, guide L2FCs and gene L2FCs
+write.xlsx(x = list("Raw Counts"=read.csv(counts.file) %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Normalised Counts"=counts %>% select(guide, gene, identity, all.samples) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity),
+                    "Guide L2FCs"=counts %>% select(guide, gene, identity, l2fc.1, l2fc.2) %>% rename(GUIDE=guide, GENE=gene, IDENTITY=identity, L2FC_IN_VITRO=l2fc.1, L2FC_IN_VIVO=l2fc.2),
+                    "Gene L2FCs"=l2fcs %>% rename(GENE=gene, IDENTITY=identity, MEDIAN_L2FC_IN_VITRO=median.l2fc.1, MAD_L2FC_IN_VITRO=mad.l2fc.1, P_VALUE_IN_VITRO=pvalue.l2fc.1, MEDIAN_L2FC_IN_VIVO=median.l2fc.2, MAD_L2FC_IN_VIVO=mad.l2fc.2, P_VALUE_IN_VIVO=pvalue.l2fc.2, L2FC_DIFFERENCE=l2fc.difference, DISCO_SCORE=disco.score)), 
+           file = paste("./outputs/", output.name, " Counts & L2FCs.xlsx", sep=""))
+
