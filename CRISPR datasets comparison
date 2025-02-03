@@ -1,0 +1,108 @@
+##### 2023 CRISPR SCREEN ANALYSIS #####
+##### Code written by Simon Butterworth 2023 #####
+#####
+##### SETUP #####
+rm(list=ls())
+library(tidyverse)
+library(ggrepel)
+library(scales)
+library(tune)
+library(ggpubr)
+library(dplyr)
+library(openxlsx)
+library(ggplot2)
+
+#####
+##### INPUTS #####
+
+#Set working directory
+setwd("~/Desktop/MANUSCRIPT/GRA12/CRISPR screens")
+
+#Butterworth et al 2022 - PRU In Vivo (BL6)
+pdf("FigureS1_E1.pdf")
+read.xlsx("./outputs/PRU In Vivo CRISPR Screen Counts & L2FCs.xlsx", sheet="Gene L2FCs") %>%
+  inner_join(read.csv("./inputs/published_datasets/Butterworth et al 2022 - PRU In Vivo BL6.csv"), by="GENE", suffix=c("_TORELLI", "_BUTTERWORTH")) %>%
+  ggplot(aes(x=MEDIAN_L2FC_IN_VITRO_TORELLI, y=MEDIAN_L2FC_IN_VITRO_BUTTERWORTH))+
+    stat_cor(method = "spearman", label.x.npc = 0.05, label.y.npc = 0.95, size=5)+
+    geom_hline(yintercept = 0, colour="grey90", size=1)+
+    geom_vline(xintercept = 0, colour="grey90", size=1)+
+    geom_smooth(method='lm', formula=y~x, fullrange=T, colour="grey80", fill="grey80")+
+    geom_point()+
+    theme_pubr(border=T)+
+    theme(text=element_text(size=15))+
+    scale_x_continuous(limits=c(-1.7,1.7), expand = c(0,0), oob=squish)+
+    scale_y_continuous(limits=c(-1.7,1.7), expand = c(0,0), oob=squish)+
+    labs(x=expression(paste("Median L2FC ", italic("in vitro"), "(current study)")), y=expression(paste("Median L2FC ", italic("in vitro"), " (Butterworth ", italic("et al."), " 2022)")))
+dev.off()
+
+pdf("FigureS1_F1.pdf")
+read.xlsx("./outputs/PRU In Vivo CRISPR Screen Counts & L2FCs.xlsx", sheet="Gene L2FCs") %>%
+  inner_join(read.csv("./inputs/published_datasets/Butterworth et al 2022 - PRU In Vivo BL6.csv"), by="GENE", suffix=c("_TORELLI", "_BUTTERWORTH")) %>%
+  ggplot(aes(x=MEDIAN_L2FC_IN_VIVO_TORELLI, y=MEDIAN_L2FC_IN_VIVO_BUTTERWORTH))+
+    stat_cor(method = "spearman", label.x.npc = 0.05, label.y.npc = 0.95, size=5)+
+    geom_hline(yintercept = 0, colour="grey90", size=1)+
+    geom_vline(xintercept = 0, colour="grey90", size=1)+
+    geom_smooth(method='lm', formula=y~x, fullrange=T, colour="grey80", fill="grey80")+
+    geom_point()+
+    theme_pubr(border=T)+
+    theme(text=element_text(size=15))+
+    #geom_text_repel(data = filter("MEDIAN_L2FC_IN_VIVO_TORELLI"<-1&"MEDIAN_L2FC_IN_VIVO_BUTTERWORTH"<1), aes(label="IDENTITY"))+
+    scale_x_continuous(limits=c(-5.5,1.5), expand = c(0,0), oob=squish)+
+    scale_y_continuous(limits=c(-5.5,1.5), expand = c(0,0), oob=squish)+
+    labs(x=expression(paste("Median L2FC ", italic("in vivo"), " (current study)")), y=expression(paste("Median L2FC ", italic("in vivo"), " (Butterworth ", italic("et al."), " 2022)")))
+dev.off()
+
+data <- read.xlsx("./outputs/RH In Vivo CRISPR Screen Counts & L2FCs.xlsx", sheet="Gene L2FCs") %>%
+  inner_join(read.csv("./inputs/published_datasets/Butterworth et al 2022 - PRU In Vivo BL6.csv"), by="GENE", suffix=c("_TORELLI", "_BUTTERWORTH")) %>%
+  subset(MEDIAN_L2FC_IN_VIVO_TORELLI< -1 & MEDIAN_L2FC_IN_VIVO_BUTTERWORTH < -1)
+      
+  
+#Young et al 2019 - PRU In Vivo (BL6)
+pdf("FigureS1_E2.pdf")
+pru <- read.xlsx("./outputs/PRU In Vivo CRISPR Screen Counts & L2FCs.xlsx", sheet="Gene L2FCs") %>%
+  inner_join(read.csv("./inputs/published_datasets/Young et al 2019 - PRU In Vivo BL6.csv"), by="GENE", suffix=c("_TORELLI", "_YOUNG"))
+ggplot(pru, aes(x=MEDIAN_L2FC_IN_VITRO_TORELLI, y=MEDIAN_L2FC_IN_VITRO_YOUNG))+
+  stat_cor(method = "spearman", label.x.npc = 0.05, label.y.npc = 0.95, size=5)+
+  geom_hline(yintercept = 0, colour="grey90", size=1)+
+  geom_vline(xintercept = 0, colour="grey90", size=1)+
+  geom_smooth(method='lm', formula=y~x, fullrange=T, colour="grey80", fill="grey80")+
+  geom_point()+
+  theme_pubr(border=T)+
+  theme(text=element_text(size=15))+
+  scale_x_continuous(limits=c(-3.5,1.5), expand = c(0,0), oob=squish)+
+  scale_y_continuous(limits=c(-3.5,1.5), expand = c(0,0), oob=squish)+
+  labs(x=expression(paste("Median L2FC ", italic("in vitro"), " (current study)")), y=expression(paste("Median L2FC ", italic("in vitro"), " (Young ", italic("et al."), " 2019)")))
+dev.off()
+
+pdf("FigureS1_F2.pdf")
+ggplot(pru, aes(x=MEDIAN_L2FC_IN_VIVO_TORELLI, y=MEDIAN_L2FC_IN_VIVO_YOUNG))+
+  stat_cor(method = "spearman", label.x.npc = 0.05, label.y.npc = 0.95, size=5)+
+  geom_hline(yintercept = 0, colour="grey90", size=1)+
+  geom_vline(xintercept = 0, colour="grey90", size=1)+
+  geom_smooth(method='lm', formula=y~x, fullrange=T, colour="grey80", fill="grey80")+
+  geom_point()+
+  theme_pubr(border=T)+
+  theme(text=element_text(size=15))+
+  scale_x_continuous(limits=c(-5.5,1.5), expand = c(0,0), oob=squish)+
+  scale_y_continuous(limits=c(-5.5,1.5), expand = c(0,0), oob=squish)+
+  labs(x=expression(paste("Median L2FC ", italic("in vivo"), " (current study)")), y=expression(paste("Median L2FC ", italic("in vivo"), " (Young ", italic("et al."), " 2019)")))
+dev.off()
+  
+#Sidik et al 2016 - RH In Vitro
+read.xlsx("./outputs/RH In Vivo CRISPR Screen Counts & L2FCs.xlsx", sheet="Gene L2FCs") %>%
+  inner_join(read.csv("./inputs/published_datasets/Sidik et al 2016 - RH In Vitro.csv"), by="GENE", suffix=c("_TORELLI", "_SIDIK")) %>%
+  ggplot(aes(x=MEDIAN_L2FC_IN_VITRO_TORELLI, y=MEDIAN_L2FC_IN_VITRO_SIDIK))+
+  stat_cor(method = "spearman", label.x.npc = 0.05, label.y.npc = 0.95, size=5)+
+    geom_hline(yintercept = 0, colour="grey90", size=1)+
+    geom_vline(xintercept = 0, colour="grey90", size=1)+
+    geom_smooth(method='lm', formula=y~x, fullrange=T, colour="grey80", fill="grey80")+
+    geom_point()+
+    theme_pubr(border=T)+
+    theme(text=element_text(size=15))+
+    scale_x_continuous(limits=c(-5.5,3), expand=c(0,0), oob=squish)+
+    scale_y_continuous(limits=c(-5.5,3), expand=c(0,0), oob=squish)+
+    labs(x=expression(paste("Median L2FC ", italic("in vitro"), " (current study)")), y=expression(paste("Median L2FC ", italic("in vitro"), " (Sidik ", italic("et al."), " 2016)")))
+
+
+
+
